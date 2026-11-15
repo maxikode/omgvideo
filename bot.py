@@ -20,11 +20,12 @@ log = logging.getLogger("omgvideo")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 WIDTH, HEIGHT, FPS = 720, 405, 24
-MAX_SECONDS = 12
+MAX_SECONDS = 300  # 5 minutes
 MAX_COMMANDS = 40
+MAX_VIDEO_BYTES = 49 * 1024 * 1024
 BG = (18, 20, 30)
 
 
@@ -55,12 +56,12 @@ HELP = """🎬 OMGVideo
 
 2. Пришли код в поддерживаемом формате:
 circle(id="ball", x=100, y=200, radius=35, color="red")
-move("ball", x=600, y=200, duration=3)
+move(id="ball", x=600, y=200, duration=3)
 text(value="Привет!", x=360, y=70, color="white")
 
 Координаты: x от 0 до 720, y от 0 до 405.
 Поддерживаются circle, rect, text и move.
-Максимальная длина ролика — 12 секунд.
+Максимальная длина ролика — 5 минут.
 
 Команды:
 /start — помощь
@@ -167,7 +168,9 @@ def validate_commands(commands):
             timeline.append((start, "move", obj_id, {"x": x, "y": y, "duration": duration}))
         if current_time > MAX_SECONDS:
             raise ValueError(f"Длительность не должна превышать {MAX_SECONDS} секунд.")
-    total = max(2.0, current_time + 1.0)
+    total = max(2.0, current_time)
+    if total > MAX_SECONDS:
+        raise ValueError(f"Длительность ролика не должна превышать {MAX_SECONDS // 60} минут.")
     return timeline, total
 
 def render_video(commands, output_path):
@@ -178,7 +181,9 @@ def render_video(commands, output_path):
     proc = subprocess.Popen(
         [ffmpeg, "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
          "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(FPS),
-         "-i", "-", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+         "-i", "-", "-an", "-c:v", "libx264", "-preset", "veryfast",
+         "-crf", "28", "-maxrate", "1200k", "-bufsize", "2400k",
+         "-threads", "2", "-pix_fmt", "yuv420p",
          "-movflags", "+faststart", str(output_path)],
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
     )
@@ -214,7 +219,7 @@ def render_video(commands, output_path):
             proc.stdin.write(image.tobytes())
         proc.stdin.close()
         stderr = proc.stderr.read()
-        code = proc.wait(timeout=30)
+        code = proc.wait(timeout=600)
         if code:
             raise RuntimeError(stderr.decode("utf-8", "ignore")[-1200:])
     except Exception:
@@ -233,6 +238,7 @@ async def generate_script(description: str):
         'move(id="ball", x=600, y=200, duration=3). '
         "Coordinates x 0..720, y 0..405. Colors: red, blue, green, yellow, "
         "white, black, purple, orange, pink, cyan. Max 40 calls and 12 seconds. "
+        "Maximum animation duration is 300 seconds (5 minutes); total move durations must not exceed 300 seconds. "
         "No markdown, no explanation, no other syntax. User description: " + description[:1000]
     )
     timeout = aiohttp.ClientTimeout(total=45)
@@ -247,6 +253,12 @@ async def generate_script(description: str):
             if response.status != 200:
                 raise ValueError("Groq API вернул ошибку: " + str(data.get("error", {}).get("message", response.status))[:300])
             content = data["choices"][0]["message"]["content"]
+            content = (content or "").strip()
+            if content.startswith("```"):
+                content = re.sub(r"^\`\`\`(?:python)?\s*", "", content, count=1, flags=re.IGNORECASE)
+                content = re.sub(r"\s*\`\`\`\s*$", "", content, count=1)
+            if not content:
+                raise ValueError("Groq вернул пустой сценарий. Попробуй описать анимацию подробнее.")
             return parse_script(content)
 
 async def make_and_send(message: Message, commands):
@@ -255,6 +267,8 @@ async def make_and_send(message: Message, commands):
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "omgvideo.mp4"
             await asyncio.to_thread(render_video, commands, output)
+            if output.stat().st_size > MAX_VIDEO_BYTES:
+                raise RuntimeError("Получилось слишком большое видео для отправки в Telegram. Уменьши длительность или количество объектов.")
             from aiogram.types import FSInputFile
             await message.answer_video(FSInputFile(output, filename="omgvideo.mp4"),
                                        caption="🎞️ Готово! Анимация создана в OMGVideo.")
