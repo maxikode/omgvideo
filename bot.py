@@ -11,7 +11,7 @@ from threading import Thread
 import aiohttp
 import imageio_ffmpeg
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from PIL import Image, ImageDraw, ImageFont
 
@@ -66,8 +66,15 @@ text(value="Привет!", x=360, y=70, color="white")
 Команды:
 /start — помощь
 /help — помощь
+/groq описание — создать анимацию по описанию через Groq
+/code код — создать анимацию только из DSL-кода
 
-Для текстовой генерации нужна переменная GROQ_API_KEY в Render.
+Пример:
+/groq Красный шар летит слева направо
+/code circle(id="ball", x=100, y=200, radius=35, color="red")
+move("ball", x=600, y=200, duration=3)
+
+Для генерации через Groq нужна переменная GROQ_API_KEY в Render.
 """
 
 # This is a small declarative animation language, NOT arbitrary Python.
