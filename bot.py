@@ -25,7 +25,7 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 WIDTH, HEIGHT, FPS = 720, 405, 24
 MAX_SECONDS = 300  # 5 minutes
 MAX_COMMANDS = 40
-MAX_VIDEO_BYTES = 49 * 1024 * 1024
+MAX_VIDEO_BYTES = 48_000_000
 BG = (18, 20, 30)
 
 
@@ -268,7 +268,7 @@ async def generate_script(description: str):
             content = data["choices"][0]["message"]["content"]
             content = (content or "").strip()
             if content.startswith("```"):
-                content = re.sub(r"^\`\`\`(?:python)?\s*", "", content, count=1, flags=re.IGNORECASE)
+                content = re.sub(r"^```(?:python)?\s*", "", content, count=1, flags=re.IGNORECASE)
                 content = re.sub(r"\s*\`\`\`\s*$", "", content, count=1)
             if not content:
                 raise ValueError("Groq вернул пустой сценарий. Попробуй описать анимацию подробнее.")
@@ -309,7 +309,7 @@ async def main():
             return
         if source.startswith("```"):
             source = re.sub(r"^\`\`\`(?:python)?\s*", "", source, count=1, flags=re.IGNORECASE)
-            source = re.sub(r"\s*\`\`\`$", "", source, count=1)
+            source = re.sub(r"\s*```$", "", source, count=1)
         try:
             if re.search(r"\b(circle|rect|text|move)\s*\(", source):
                 commands = parse_script(source)
