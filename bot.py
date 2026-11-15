@@ -5,6 +5,8 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 
 import aiohttp
 import imageio_ffmpeg
@@ -24,6 +26,25 @@ WIDTH, HEIGHT, FPS = 720, 405, 24
 MAX_SECONDS = 12
 MAX_COMMANDS = 40
 BG = (18, 20, 30)
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, format, *args):
+        return
+
+
+def start_health_server():
+    port = int(os.getenv("PORT", "10000"))
+    server = ThreadingHTTPServer(("0.0.0.0", port), HealthHandler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    log.info("Health server listening on port %s", port)
+
 
 HELP = """🎬 OMGVideo
 
@@ -159,7 +180,7 @@ def render_video(commands, output_path):
          "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(FPS),
          "-i", "-", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
          "-movflags", "+faststart", str(output_path)],
-        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
     )
     try:
         for frame_no in range(frames):
@@ -245,6 +266,7 @@ async def make_and_send(message: Message, commands):
 async def main():
     if not BOT_TOKEN:
         raise RuntimeError("Не задан BOT_TOKEN в переменных окружения Render.")
+    start_health_server()
     bot = Bot(BOT_TOKEN)
     dp = Dispatcher()
 
@@ -259,7 +281,7 @@ async def main():
         if source.startswith("/"):
             return
         try:
-            if re.search(r"\\b(circle|rect|text|move)\\s*\\(", source):
+            if re.search(r"\b(circle|rect|text|move)\s*\(", source):
                 commands = parse_script(source)
             else:
                 commands = await generate_script(source)
