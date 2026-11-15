@@ -198,7 +198,8 @@ def render_video(commands, output_path):
     import subprocess
     stderr_file = tempfile.TemporaryFile()
     proc = subprocess.Popen(
-        [ffmpeg, "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
+        [ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "rawvideo", "-vcodec", "rawvideo",
          "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(FPS),
          "-i", "-", "-an", "-c:v", "libx264", "-preset", "ultrafast",
          "-crf", "30", "-maxrate", "800k", "-bufsize", "1600k",
@@ -243,7 +244,7 @@ def render_video(commands, output_path):
                 details = stderr_file.read().decode("utf-8", "ignore")[-1800:]
                 raise RuntimeError(
                     f"FFmpeg завершился раньше времени (код {exit_code}). "
-                    f"Диагностика: {details or 'FFmpeg не сообщил причину; возможно, Render ограничил ресурсы.'}"
+                    f"Последние строки диагностики: {details[-2200:] or 'FFmpeg не сообщил причину; возможно, Render ограничил ресурсы.'}"
                 ) from exc
         proc.stdin.close()
         code = proc.wait(timeout=900)
@@ -251,7 +252,7 @@ def render_video(commands, output_path):
             stderr_file.seek(0)
             stderr = stderr_file.read()
             raise RuntimeError("FFmpeg ошибка (код " + str(code) + "): " +
-                               stderr.decode("utf-8", "ignore")[-1800:])
+                               stderr.decode("utf-8", "ignore")[-2200:])
     except Exception:
         if proc.poll() is None:
             proc.kill()
@@ -307,7 +308,10 @@ async def make_and_send(message: Message, commands):
         await status.delete()
     except Exception as exc:
         log.exception("Render failed")
-        await status.edit_text("Не удалось создать видео: " + str(exc)[:700])
+        error_text = str(exc)
+        # Display the end of FFmpeg's stderr, where the actual cause is usually located.
+        visible_error = error_text[-3000:] if len(error_text) > 3000 else error_text
+        await status.edit_text("Не удалось создать видео:\\n" + visible_error)
 
 async def main():
     if not BOT_TOKEN:
