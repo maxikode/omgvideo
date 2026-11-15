@@ -119,7 +119,9 @@ def parse_script(source: str):
 
     if not commands:
         raise ValueError("Код пустой.")
-    return validate_commands(commands)
+    # Validate now, but return raw DSL commands for render_video.
+    validate_commands(commands)
+    return commands
 
 def validate_commands(commands):
     objects = {}
@@ -302,14 +304,48 @@ async def main():
     async def help_handler(message: Message):
         await message.answer(HELP)
 
+    def clean_source(source: str):
+        source = source.strip()
+        if source.startswith("```"):
+            source = re.sub(r"^```(?:python)?\s*", "", source, count=1, flags=re.IGNORECASE)
+            source = re.sub(r"\s*```$", "", source, count=1)
+        return source.strip()
+
+    @dp.message(Command("groq"))
+    async def groq_handler(message: Message):
+        source = (message.text or "").partition(" ")[2].strip()
+        if not source:
+            await message.answer("Напиши описание после команды, например:\n/groq Синий квадрат плавно движется.")
+            return
+        try:
+            commands = await generate_script(source)
+            await make_and_send(message, commands)
+        except ValueError as exc:
+            await message.answer("⚠️ " + str(exc) + "\n\n/help — инструкции.")
+        except Exception:
+            log.exception("Groq command failed")
+            await message.answer("⚠️ Не получилось получить сценарий от Groq. Попробуй позже.")
+
+    @dp.message(Command("code"))
+    async def code_handler(message: Message):
+        source = clean_source((message.text or "").partition(" ")[2])
+        if not source:
+            await message.answer("Пришли DSL-код после /code. Пример:\n/code circle(id=\"ball\", x=100, y=200, radius=35, color=\"red\")\nmove(\"ball\", x=600, y=200, duration=3)")
+            return
+        try:
+            commands = parse_script(source)
+            await make_and_send(message, commands)
+        except ValueError as exc:
+            await message.answer("⚠️ " + str(exc) + "\n\n/help — примеры.")
+        except Exception:
+            log.exception("Code command failed")
+            await message.answer("⚠️ Не получилось обработать код. Проверь синтаксис.")
+
     @dp.message(F.text)
     async def text_handler(message: Message):
-        source = message.text.strip()
+        source = clean_source(message.text or "")
         if source.startswith("/"):
             return
-        if source.startswith("```"):
-            source = re.sub(r"^\`\`\`(?:python)?\s*", "", source, count=1, flags=re.IGNORECASE)
-            source = re.sub(r"\s*```$", "", source, count=1)
         try:
             if re.search(r"\b(circle|rect|text|move)\s*\(", source):
                 commands = parse_script(source)
