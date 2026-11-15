@@ -200,9 +200,9 @@ def render_video(commands, output_path):
     proc = subprocess.Popen(
         [ffmpeg, "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
          "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(FPS),
-         "-i", "-", "-an", "-c:v", "libx264", "-preset", "veryfast",
-         "-crf", "28", "-maxrate", "1200k", "-bufsize", "2400k",
-         "-threads", "2", "-pix_fmt", "yuv420p",
+         "-i", "-", "-an", "-c:v", "libx264", "-preset", "ultrafast",
+         "-crf", "30", "-maxrate", "800k", "-bufsize", "1600k",
+         "-threads", "1", "-pix_fmt", "yuv420p",
          "-movflags", "+faststart", str(output_path)],
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=stderr_file
     )
@@ -235,13 +235,23 @@ def render_video(commands, output_path):
                     except OSError:
                         font = ImageFont.load_default()
                     draw.text((x, y), obj["value"], fill=color, font=font, anchor="mm")
-            proc.stdin.write(image.tobytes())
+            try:
+                proc.stdin.write(image.tobytes())
+            except BrokenPipeError as exc:
+                exit_code = proc.wait(timeout=30)
+                stderr_file.seek(0)
+                details = stderr_file.read().decode("utf-8", "ignore")[-1800:]
+                raise RuntimeError(
+                    f"FFmpeg завершился раньше времени (код {exit_code}). "
+                    f"Диагностика: {details or 'FFmpeg не сообщил причину; возможно, Render ограничил ресурсы.'}"
+                ) from exc
         proc.stdin.close()
         code = proc.wait(timeout=900)
         if code:
             stderr_file.seek(0)
             stderr = stderr_file.read()
-            raise RuntimeError(stderr.decode("utf-8", "ignore")[-1200:])
+            raise RuntimeError("FFmpeg ошибка (код " + str(code) + "): " +
+                               stderr.decode("utf-8", "ignore")[-1800:])
     except Exception:
         if proc.poll() is None:
             proc.kill()
