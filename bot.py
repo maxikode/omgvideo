@@ -96,9 +96,18 @@ def parse_script(source: str):
         call = node.value
         if not isinstance(call.func, ast.Name) or call.func.id not in ALLOWED:
             raise ValueError("Недопустимая команда. Используй circle, rect, text или move.")
-        if call.args or any(k.arg is None for k in call.keywords):
-            raise ValueError("Используй именованные параметры, как в примере.")
+        # For backward compatibility, move("ball", x=..., y=..., duration=...)
+        # is accepted as well as move(id="ball", ...).
+        if any(k.arg is None for k in call.keywords):
+            raise ValueError("Распаковка параметров не поддерживается.")
         values = {}
+        if call.args:
+            if call.func.id != "move" or len(call.args) != 1:
+                raise ValueError("Для circle, rect и text используй именованные параметры.")
+            arg = call.args[0]
+            if not isinstance(arg, ast.Constant) or not isinstance(arg.value, str):
+                raise ValueError('Первый параметр move должен быть ID объекта, например move("ball", ...).')
+            values["id"] = arg.value
         for kw in call.keywords:
             value = kw.value
             if not isinstance(value, ast.Constant) or not isinstance(value.value, (str, int, float)):
@@ -237,7 +246,7 @@ async def generate_script(description: str):
         'text(value="Hello", x=360, y=60, color="white"), '
         'move(id="ball", x=600, y=200, duration=3). '
         "Coordinates x 0..720, y 0..405. Colors: red, blue, green, yellow, "
-        "white, black, purple, orange, pink, cyan. Max 40 calls and 12 seconds. "
+        "white, black, purple, orange, pink, cyan. Max 40 calls. "
         "Maximum animation duration is 300 seconds (5 minutes); total move durations must not exceed 300 seconds. "
         "No markdown, no explanation, no other syntax. User description: " + description[:1000]
     )
