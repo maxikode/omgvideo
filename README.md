@@ -24,13 +24,21 @@ Supported commands:
 
 Coordinates are pixels in a 720x405 frame. Colors: red, blue, green, yellow, white, black, purple, orange, pink, cyan.
 
-## Deploy on Render
-Create a Background Worker from this repository. Build command: `pip install -r requirements.txt`. Start command: `python bot.py`. Add environment variables:
-- BOT_TOKEN: token from BotFather
-- GROQ_API_KEY: Groq API key (needed only for text prompts)
-- GROQ_MODEL: optional; defaults to `llama-3.3-70b-versatile`
+## Deploy on Render (Free Web Service)
+Create a **Web Service** from this repository (not a Background Worker).
 
-Render does not offer a Free instance for Background Workers; the Blueprint uses the Starter worker plan, which is paid. Check current pricing before creating it. Do not deploy this as a web service: it uses Telegram long polling and does not need a public HTTP port.
+- Runtime: Python
+- Build command: `pip install -r requirements.txt`
+- Start command: `python bot.py`
+- Instance type: Free
+- Health check path: `/`
+
+Add environment variables:
+- `BOT_TOKEN`: token from BotFather
+- `GROQ_API_KEY`: Groq API key (needed only for text prompts)
+- `GROQ_MODEL`: optional; defaults to `llama-3.3-70b-versatile`
+
+The app runs Telegram long polling and a small HTTP health server on Render's `PORT`. The free Render web service can spin down after a period without inbound HTTP traffic, so the bot may be temporarily unavailable while it sleeps and can take time to wake up. A health endpoint does not prevent free-instance sleep. Do not run a second copy of the bot with the same Telegram token at the same time, because Telegram polling will conflict.
 
 ## Safety note
 This is intentionally not an arbitrary Python execution service. The bot parses a tiny allowlisted DSL and never calls exec/eval on user input. This reduces code-execution risk substantially. Keep dependencies updated and never add arbitrary imports, file access, shell commands, or network access to user scripts.
