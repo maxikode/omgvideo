@@ -320,7 +320,10 @@ async def main():
 
     @dp.message(Command("groq"))
     async def groq_handler(message: Message):
-        source = (message.text or "").partition(" ")[2].strip()
+        raw = message.text or ""
+        parts = raw.split(maxsplit=1)
+        source = parts[1].strip() if len(parts) > 1 else ""
+        log.info("Received /groq command; prompt_present=%s", bool(source))
         if not source:
             await message.answer("Напиши описание после команды, например:\n/groq Синий квадрат плавно движется.")
             return
@@ -335,7 +338,10 @@ async def main():
 
     @dp.message(Command("code"))
     async def code_handler(message: Message):
-        source = clean_source((message.text or "").partition(" ")[2])
+        raw = message.text or ""
+        parts = raw.split(maxsplit=1)
+        source = clean_source(parts[1] if len(parts) > 1 else "")
+        log.info("Received /code command; code_present=%s", bool(source))
         if not source:
             await message.answer("Пришли DSL-код после /code. Пример:\n/code circle(id=\"ball\", x=100, y=200, radius=35, color=\"red\")\nmove(\"ball\", x=600, y=200, duration=3)")
             return
@@ -365,6 +371,8 @@ async def main():
             log.exception("Message handling failed")
             await message.answer("⚠️ Не получилось обработать запрос. Попробуй ещё раз.")
 
+    log.info("OMGVideo bot starting polling; GROQ_MODEL=%s; Groq key configured=%s",
+             GROQ_MODEL, bool(GROQ_API_KEY))
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
