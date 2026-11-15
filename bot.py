@@ -187,6 +187,7 @@ def render_video(commands, output_path):
     frames = int(total * FPS)
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     import subprocess
+    stderr_file = tempfile.TemporaryFile()
     proc = subprocess.Popen(
         [ffmpeg, "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
          "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(FPS),
@@ -194,7 +195,7 @@ def render_video(commands, output_path):
          "-crf", "28", "-maxrate", "1200k", "-bufsize", "2400k",
          "-threads", "2", "-pix_fmt", "yuv420p",
          "-movflags", "+faststart", str(output_path)],
-        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=stderr_file
     )
     try:
         for frame_no in range(frames):
@@ -227,14 +228,17 @@ def render_video(commands, output_path):
                     draw.text((x, y), obj["value"], fill=color, font=font, anchor="mm")
             proc.stdin.write(image.tobytes())
         proc.stdin.close()
-        stderr = proc.stderr.read()
-        code = proc.wait(timeout=600)
+        code = proc.wait(timeout=900)
         if code:
+            stderr_file.seek(0)
+            stderr = stderr_file.read()
             raise RuntimeError(stderr.decode("utf-8", "ignore")[-1200:])
     except Exception:
         if proc.poll() is None:
             proc.kill()
         raise
+    finally:
+        stderr_file.close()
 
 async def generate_script(description: str):
     if not GROQ_API_KEY:
@@ -303,6 +307,9 @@ async def main():
         source = message.text.strip()
         if source.startswith("/"):
             return
+        if source.startswith("```"):
+            source = re.sub(r"^\`\`\`(?:python)?\s*", "", source, count=1, flags=re.IGNORECASE)
+            source = re.sub(r"\s*\`\`\`$", "", source, count=1)
         try:
             if re.search(r"\b(circle|rect|text|move)\s*\(", source):
                 commands = parse_script(source)
