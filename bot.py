@@ -259,10 +259,10 @@ async def main():
         if source.startswith("/"):
             return
         try:
-            if any(word in source.lower() for word in ("нарисуй", "создай", "сделай", "анимац", "видео", "двигается", "летит", "идёт", "идет")) and not re.search(r"\b(circle|rect|text|move)\s*\(", source):
-                commands = await generate_script(source)
-            else:
+            if re.search(r"\\b(circle|rect|text|move)\\s*\\(", source):
                 commands = parse_script(source)
+            else:
+                commands = await generate_script(source)
             await make_and_send(message, commands)
         except ValueError as exc:
             await message.answer("⚠️ " + str(exc) + "\n\n/help — примеры и инструкции.")
