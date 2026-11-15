@@ -5,7 +5,7 @@ Telegram bot that creates short MP4 animations from a small, safe animation lang
 ## Features
 - Send a description in Russian or English to generate an animation (requires GROQ_API_KEY).
 - Send DSL commands to render an animation without an AI API.
-- MP4 output, 720x405, 24 FPS, up to 12 seconds.
+- MP4 output, 720x405, 24 FPS, up to 5 minutes (300 seconds).
 
 ## Animation language
 The bot does NOT execute arbitrary Python. It parses a restricted set of declarative commands.
@@ -20,7 +20,7 @@ Supported commands:
 - circle(id, x, y, radius, color)
 - rect(id, x, y, width, height, color)
 - text(value, x, y, color)
-- move(id, x, y, duration)
+- move(id, x, y, duration); the first move argument may also be written positionally, e.g. `move("ball", x=600, y=200, duration=3)`
 
 Coordinates are pixels in a 720x405 frame. Colors: red, blue, green, yellow, white, black, purple, orange, pink, cyan.
 
