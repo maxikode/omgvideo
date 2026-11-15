@@ -33,9 +33,9 @@ HELP = """🎬 OMGVideo
 «Красный шар плавно летит слева направо».
 
 2. Пришли код в поддерживаемом формате:
-circle("ball", x=100, y=200, radius=35, color="red")
+circle(id="ball", x=100, y=200, radius=35, color="red")
 move("ball", x=600, y=200, duration=3)
-text("Привет!", x=360, y=70, color="white")
+text(value="Привет!", x=360, y=70, color="white")
 
 Координаты: x от 0 до 720, y от 0 до 405.
 Поддерживаются circle, rect, text и move.
@@ -159,7 +159,7 @@ def render_video(commands, output_path):
          "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(FPS),
          "-i", "-", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
          "-movflags", "+faststart", str(output_path)],
-        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
     try:
         for frame_no in range(frames):
